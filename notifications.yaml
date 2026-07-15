@@ -854,7 +854,7 @@ sequence:
            clear_on_response | default(blueprint_default_clear_on_response, true) }}
 
   - alias: Clear the notification after response or timeout
-    if: "{{ should_clear and tag_value }}"
+    if: "{{ (should_clear | bool) and (tag_value | length > 0) }}"
     then:
       - repeat:
           for_each: "{{ recipient_routes }}"

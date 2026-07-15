@@ -40,6 +40,12 @@ Create a script from the imported blueprint and select its default Companion
 `notify` entities. The examples below assume the resulting script entity is
 `script.modern_multi_device_notifications`.
 
+### Updating
+
+After a new version is published, re-import the blueprint from the same URL.
+Then open and save the generated script so Home Assistant reloads it with the
+updated blueprint before testing the changed behavior.
+
 ## Automation editor
 
 When calling the generated script from an automation, the action editor initially
