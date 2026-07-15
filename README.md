@@ -40,6 +40,20 @@ Create a script from the imported blueprint and select its default Companion
 `notify` entities. The examples below assume the resulting script entity is
 `script.modern_multi_device_notifications`.
 
+## Automation editor
+
+When calling the generated script from an automation, the action editor initially
+shows only **Title** and **Message**. Both are required when sending a
+notification. Every optional notification feature has a neutral or inactive
+default. The remaining fields are available under **Show advanced options**,
+including recipient overrides, tags, delivery settings, attachments, actions,
+and response handling.
+
+Home Assistant script fields do not support separate collapsible groups. The
+single advanced-options section is the native way to keep a script call compact.
+For a Clear operation, open the advanced options, select **Clear by tag**, and
+provide **Tag**; Title and Message are not required when clearing.
+
 ## Basic notification
 
 ```yaml
