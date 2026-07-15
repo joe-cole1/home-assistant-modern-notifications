@@ -1,0 +1,866 @@
+blueprint:
+  name: Modern Multi-Device Notifications
+  description: >-
+    Send rich Home Assistant Companion notifications to multiple devices from one
+    reusable script. Supports attachments, delivery profiles, three actionable
+    buttons, text replies, first-response-wins handling, timeouts, replacement,
+    clearing, and a structured response for the calling automation.
+
+    This blueprint targets Home Assistant 2026.7 or newer. It intentionally does
+    not execute the caller's business logic: direct script calls can capture the
+    returned response and choose what to do next.
+  domain: script
+  author: Joe
+  source_url: https://github.com/joe-cole1/home-assistant-modern-notifications/blob/main/notifications.yaml
+  homeassistant:
+    min_version: "2026.7.0"
+  input:
+    recipients_section:
+      name: Recipients
+      icon: mdi:devices
+      input:
+        default_recipients:
+          name: Default Companion notification entities
+          description: >-
+            One or more notify entities created by the Home Assistant Companion
+            app. A script call may override this list.
+          selector:
+            entity:
+              filter:
+                - domain: notify
+                  integration: mobile_app
+              multiple: true
+    response_section:
+      name: Response defaults
+      icon: mdi:message-reply-text
+      collapsed: true
+      input:
+        default_response_timeout:
+          name: Response timeout
+          default:
+            hours: 0
+            minutes: 15
+            seconds: 0
+          selector:
+            duration:
+              enable_day: false
+        default_clear_on_response:
+          name: Clear after a response
+          default: true
+          selector:
+            boolean:
+        default_clear_on_timeout:
+          name: Clear after timeout
+          default: true
+          selector:
+            boolean:
+
+alias: Modern Multi-Device Notifications
+description: >-
+  Send, update, or clear rich Companion App notifications and optionally return
+  the first actionable response.
+icon: mdi:message-badge-outline
+mode: parallel
+max: 50
+max_exceeded: warning
+
+variables:
+  blueprint_default_recipients: !input default_recipients
+  blueprint_default_response_timeout: !input default_response_timeout
+  blueprint_default_clear_on_response: !input default_clear_on_response
+  blueprint_default_clear_on_timeout: !input default_clear_on_timeout
+
+fields:
+  operation:
+    name: Operation
+    description: >-
+      Send creates or replaces a notification. Clear removes the notification
+      identified by Tag.
+    default: send
+    required: true
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Send or replace
+            value: send
+          - label: Clear by tag
+            value: clear
+  recipients:
+    name: Recipients
+    description: Override the default Companion notification entities.
+    default: !input default_recipients
+    selector:
+      entity:
+        filter:
+          - domain: notify
+            integration: mobile_app
+        multiple: true
+  title:
+    name: Title
+    default: ""
+    selector:
+      text:
+  message:
+    name: Message
+    description: Required when Operation is Send.
+    default: ""
+    selector:
+      text:
+        multiline: true
+  subtitle:
+    name: Subtitle
+    description: iOS/macOS secondary heading.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  subject:
+    name: Subject
+    description: Android long-message subject.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  tap_url:
+    name: Tap URL
+    description: >-
+      URL opened by tapping the notification, such as /lovelace/home,
+      entityId:light.kitchen, or https://example.com.
+    default: ""
+    selector:
+      text:
+  tag:
+    name: Tag
+    description: >-
+      A stable tag replaces an earlier notification and is required for Clear.
+      Actionable sends generate a unique tag when this is empty.
+    default: ""
+    selector:
+      text:
+  group:
+    name: Group
+    description: Visual notification group identifier.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  delivery_profile:
+    name: Delivery profile
+    description: Cross-platform delivery defaults; explicit fields override it.
+    default: normal
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Quiet
+            value: quiet
+          - label: Normal
+            value: normal
+          - label: Urgent / time-sensitive
+            value: urgent
+          - label: Critical
+            value: critical
+  android_channel:
+    name: Android channel
+    description: Empty uses the profile or Companion App default.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  android_importance:
+    name: Android importance override
+    default: ""
+    advanced: true
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Use delivery profile
+            value: ""
+          - label: Minimum
+            value: min
+          - label: Low
+            value: low
+          - label: Default
+            value: default
+          - label: High
+            value: high
+          - label: Maximum
+            value: max
+  notification_icon:
+    name: Android notification icon
+    advanced: true
+    selector:
+      icon:
+  android_color:
+    name: Android notification color
+    advanced: true
+    selector:
+      color_rgb:
+  visibility:
+    name: Android lock-screen visibility
+    default: private
+    advanced: true
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Public
+            value: public
+          - label: Private
+            value: private
+          - label: Secret
+            value: secret
+  persistent:
+    name: Android persistent notification
+    description: Requires a tag. Android 14+ may still allow dismissal.
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  sticky:
+    name: Android sticky notification
+    description: Keep the notification after it is tapped.
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  ios_interruption_level:
+    name: iOS interruption level override
+    default: ""
+    advanced: true
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Use delivery profile
+            value: ""
+          - label: Passive
+            value: passive
+          - label: Active
+            value: active
+          - label: Time-sensitive
+            value: time-sensitive
+          - label: Critical
+            value: critical
+  sound:
+    name: iOS sound
+    description: Sound name, default, or none. Critical uses this as its sound name.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  critical_volume:
+    name: iOS critical volume
+    description: Used only for the Critical delivery profile.
+    default: 1.0
+    advanced: true
+    selector:
+      number:
+        min: 0
+        max: 1
+        step: 0.05
+        mode: slider
+  badge:
+    name: iOS app badge
+    advanced: true
+    selector:
+      number:
+        min: 0
+        max: 9999
+        step: 1
+        mode: box
+  attachment_type:
+    name: Attachment type
+    default: none
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: None
+            value: none
+          - label: Image
+            value: image
+          - label: Video
+            value: video
+          - label: Audio
+            value: audio
+          - label: Camera stream
+            value: camera
+  attachment_url:
+    name: Attachment URL
+    description: >-
+      Relative /media/local paths are recommended. Used for image, video, or
+      audio attachments.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  camera_entity:
+    name: Camera entity
+    description: Used when Attachment type is Camera stream.
+    advanced: true
+    selector:
+      entity:
+        filter:
+          - domain: camera
+  hide_thumbnail:
+    name: Hide attachment thumbnail
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  lazy_attachment:
+    name: Lazy-load attachment
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  action_1_title:
+    name: Action 1 title
+    description: Empty disables this action.
+    default: ""
+    selector:
+      text:
+  action_1_key:
+    name: Action 1 result key
+    default: action_1
+    advanced: true
+    selector:
+      text:
+  action_1_type:
+    name: Action 1 type
+    default: event
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Home Assistant event
+            value: event
+          - label: Text reply
+            value: reply
+          - label: Open link
+            value: link
+  action_1_uri:
+    name: Action 1 link
+    description: Used only by Open link.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  action_1_authentication_required:
+    name: Action 1 requires unlock
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  action_1_options:
+    name: Action 1 advanced options
+    description: >-
+      Additional Companion action keys, such as icon, destructive,
+      textInputButtonTitle, or textInputPlaceholder.
+    default: {}
+    advanced: true
+    selector:
+      object:
+  action_2_title:
+    name: Action 2 title
+    description: Empty disables this action.
+    default: ""
+    selector:
+      text:
+  action_2_key:
+    name: Action 2 result key
+    default: action_2
+    advanced: true
+    selector:
+      text:
+  action_2_type:
+    name: Action 2 type
+    default: event
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Home Assistant event
+            value: event
+          - label: Text reply
+            value: reply
+          - label: Open link
+            value: link
+  action_2_uri:
+    name: Action 2 link
+    description: Used only by Open link.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  action_2_authentication_required:
+    name: Action 2 requires unlock
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  action_2_options:
+    name: Action 2 advanced options
+    default: {}
+    advanced: true
+    selector:
+      object:
+  action_3_title:
+    name: Action 3 title
+    description: Empty disables this action.
+    default: ""
+    selector:
+      text:
+  action_3_key:
+    name: Action 3 result key
+    default: action_3
+    advanced: true
+    selector:
+      text:
+  action_3_type:
+    name: Action 3 type
+    default: event
+    selector:
+      select:
+        mode: dropdown
+        options:
+          - label: Home Assistant event
+            value: event
+          - label: Text reply
+            value: reply
+          - label: Open link
+            value: link
+  action_3_uri:
+    name: Action 3 link
+    description: Used only by Open link.
+    default: ""
+    advanced: true
+    selector:
+      text:
+  action_3_authentication_required:
+    name: Action 3 requires unlock
+    default: false
+    advanced: true
+    selector:
+      boolean:
+  action_3_options:
+    name: Action 3 advanced options
+    default: {}
+    advanced: true
+    selector:
+      object:
+  response_timeout:
+    name: Response timeout
+    default: !input default_response_timeout
+    selector:
+      duration:
+        enable_day: false
+  clear_on_response:
+    name: Clear after a response
+    default: !input default_clear_on_response
+    selector:
+      boolean:
+  clear_on_timeout:
+    name: Clear after timeout
+    default: !input default_clear_on_timeout
+    selector:
+      boolean:
+  callback_data:
+    name: Callback data
+    description: >-
+      Custom values echoed in the script result. Reserved run and recipient keys
+      are added by the blueprint.
+    default: {}
+    advanced: true
+    selector:
+      object:
+  extra_data:
+    name: Advanced notification data
+    description: >-
+      Raw Companion payload keys for progress, chronometers, maps, live updates,
+      TTS, wearable options, and future features. Typed fields and reserved
+      correlation keys take precedence.
+    default: {}
+    advanced: true
+    selector:
+      object:
+
+sequence:
+  - alias: Normalize inputs and build recipient routes
+    variables:
+      operation_value: "{{ operation | default('send', true) }}"
+      recipient_entities: >-
+        {{ recipients | default(blueprint_default_recipients, true) | list }}
+      title_value: "{{ title | default('', true) }}"
+      message_value: "{{ message | default('', true) }}"
+      run_id: "{{ context.id }}"
+      action_1_id: "{{ 'MDN_ACTION_1_' ~ context.id }}"
+      action_2_id: "{{ 'MDN_ACTION_2_' ~ context.id }}"
+      action_3_id: "{{ 'MDN_ACTION_3_' ~ context.id }}"
+      has_waitable_action: >-
+        {{ (action_1_title | default('', true) | trim | length > 0 and
+            action_1_type | default('event', true) != 'link') or
+           (action_2_title | default('', true) | trim | length > 0 and
+            action_2_type | default('event', true) != 'link') or
+           (action_3_title | default('', true) | trim | length > 0 and
+            action_3_type | default('event', true) != 'link') }}
+      tag_value: >-
+        {% set requested = tag | default('', true) | trim %}
+        {{ requested if requested else
+           ('modern_notifications_' ~ context.id if has_waitable_action else '') }}
+      timeout_seconds: >-
+        {% set value = response_timeout |
+          default(blueprint_default_response_timeout, true) %}
+        {{ (value.get('hours', 0) | int * 3600) +
+           (value.get('minutes', 0) | int * 60) +
+           (value.get('seconds', 0) | int) }}
+      recipient_routes: >-
+        {% set ns = namespace(items=[], unresolved=[]) %}
+        {% for entity in recipient_entities %}
+          {% set recipient_device_id = device_id(entity) %}
+          {% set device_name = device_attr(recipient_device_id, 'name')
+            if recipient_device_id else none %}
+          {% if device_name %}
+            {% set ns.items = ns.items + [{
+              'entity_id': entity,
+              'device_id': recipient_device_id,
+              'action': 'notify.mobile_app_' ~ (device_name | slugify)
+            }] %}
+          {% else %}
+            {% set ns.unresolved = ns.unresolved + [entity] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+      unresolved_recipients: >-
+        {% set ns = namespace(items=[]) %}
+        {% for entity in recipient_entities %}
+          {% set recipient_device_id = device_id(entity) %}
+          {% set device_name = device_attr(recipient_device_id, 'name')
+            if recipient_device_id else none %}
+          {% if not recipient_device_id or not device_name %}
+            {% set ns.items = ns.items + [entity] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+
+  - alias: Validate the request
+    choose:
+      - conditions: "{{ recipient_entities | count == 0 }}"
+        sequence:
+          - stop: No Companion notification recipients were selected.
+            error: true
+      - conditions: "{{ recipient_routes | count == 0 }}"
+        sequence:
+          - stop: None of the selected recipients resolve to a Mobile App device.
+            error: true
+      - conditions: "{{ operation_value == 'send' and message_value | trim == '' }}"
+        sequence:
+          - stop: Message is required when sending a notification.
+            error: true
+      - conditions: "{{ operation_value == 'clear' and tag_value == '' }}"
+        sequence:
+          - stop: Tag is required when clearing a notification.
+            error: true
+      - conditions: "{{ operation_value not in ['send', 'clear'] }}"
+        sequence:
+          - stop: Operation must be send or clear.
+            error: true
+      - conditions: >-
+          {{ (action_1_title | default('', true) | trim and
+              action_1_type | default('event', true) == 'link' and
+              not action_1_uri | default('', true) | trim) or
+             (action_2_title | default('', true) | trim and
+              action_2_type | default('event', true) == 'link' and
+              not action_2_uri | default('', true) | trim) or
+             (action_3_title | default('', true) | trim and
+              action_3_type | default('event', true) == 'link' and
+              not action_3_uri | default('', true) | trim) }}
+        sequence:
+          - stop: Every enabled link action requires a URI.
+            error: true
+
+  - alias: Build actions and the shared notification payload
+    variables:
+      notification_actions: >-
+        {% set ns = namespace(items=[]) %}
+        {% for item in [
+          {'slot': 1, 'id': action_1_id,
+           'title': action_1_title | default('', true),
+           'type': action_1_type | default('event', true),
+           'uri': action_1_uri | default('', true),
+           'auth': action_1_authentication_required | default(false),
+           'options': action_1_options | default({}, true)},
+          {'slot': 2, 'id': action_2_id,
+           'title': action_2_title | default('', true),
+           'type': action_2_type | default('event', true),
+           'uri': action_2_uri | default('', true),
+           'auth': action_2_authentication_required | default(false),
+           'options': action_2_options | default({}, true)},
+          {'slot': 3, 'id': action_3_id,
+           'title': action_3_title | default('', true),
+           'type': action_3_type | default('event', true),
+           'uri': action_3_uri | default('', true),
+           'auth': action_3_authentication_required | default(false),
+           'options': action_3_options | default({}, true)}
+        ] %}
+          {% if item.title | trim | length > 0 %}
+            {% set generated = {
+              'action': 'URI' if item.type == 'link' else item.id,
+              'title': item.title,
+              'authenticationRequired': item.auth
+            } %}
+            {% if item.type == 'reply' %}
+              {% set generated = generated | combine({'behavior': 'textInput'}) %}
+            {% endif %}
+            {% if item.type == 'link' and item.uri | trim | length > 0 %}
+              {% set generated = generated | combine({'uri': item.uri}) %}
+            {% endif %}
+            {% set ns.items = ns.items + [
+              item.options | combine(generated, recursive=true)
+            ] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+      notification_data: >-
+        {% set data = extra_data | default({}, true) %}
+        {% set profile = delivery_profile | default('normal', true) %}
+        {% if profile == 'quiet' %}
+          {% set data = data | combine({
+            'importance': 'low',
+            'push': {'interruption-level': 'passive', 'sound': 'none'}
+          }, recursive=true) %}
+        {% elif profile == 'urgent' %}
+          {% set data = data | combine({
+            'importance': 'high', 'priority': 'high', 'ttl': 0,
+            'push': {'interruption-level': 'time-sensitive'}
+          }, recursive=true) %}
+        {% elif profile == 'critical' %}
+          {% set critical_sound = sound | default('', true) | trim %}
+          {% set data = data | combine({
+            'importance': 'high', 'priority': 'high', 'ttl': 0,
+            'push': {
+              'interruption-level': 'critical',
+              'sound': {
+                'name': critical_sound if critical_sound else 'default',
+                'critical': 1,
+                'volume': critical_volume | default(1.0)
+              }
+            }
+          }, recursive=true) %}
+        {% endif %}
+        {% if subtitle | default('', true) | trim %}
+          {% set data = data | combine({'subtitle': subtitle}) %}
+        {% endif %}
+        {% if subject | default('', true) | trim %}
+          {% set data = data | combine({'subject': subject}) %}
+        {% endif %}
+        {% if tap_url | default('', true) | trim %}
+          {% set data = data | combine({'url': tap_url, 'clickAction': tap_url}) %}
+        {% endif %}
+        {% if tag_value %}
+          {% set data = data | combine({'tag': tag_value}) %}
+        {% endif %}
+        {% if group | default('', true) | trim %}
+          {% set data = data | combine({'group': group}) %}
+        {% endif %}
+        {% if android_channel | default('', true) | trim %}
+          {% set data = data | combine({'channel': android_channel}) %}
+        {% endif %}
+        {% if android_importance | default('', true) | trim %}
+          {% set data = data | combine({'importance': android_importance}) %}
+        {% endif %}
+        {% if notification_icon is defined and notification_icon %}
+          {% set data = data | combine({'notification_icon': notification_icon}) %}
+        {% endif %}
+        {% if android_color is defined and android_color | count == 3 %}
+          {% set color_hex = '#%02x%02x%02x' | format(
+            android_color[0], android_color[1], android_color[2]) %}
+          {% set data = data | combine({'color': color_hex}) %}
+        {% endif %}
+        {% set data = data | combine({
+          'visibility': visibility | default('private', true),
+          'persistent': persistent | default(false),
+          'sticky': sticky | default(false)
+        }) %}
+        {% set push = {} %}
+        {% if ios_interruption_level | default('', true) | trim %}
+          {% set push = push | combine({
+            'interruption-level': ios_interruption_level
+          }) %}
+        {% endif %}
+        {% if sound | default('', true) | trim and profile != 'critical' %}
+          {% set push = push | combine({'sound': sound}) %}
+        {% endif %}
+        {% if badge is defined and badge is not none %}
+          {% set push = push | combine({'badge': badge | int}) %}
+        {% endif %}
+        {% if push | count > 0 %}
+          {% set data = data | combine({'push': push}, recursive=true) %}
+        {% endif %}
+        {% set kind = attachment_type | default('none', true) %}
+        {% if kind in ['image', 'video', 'audio'] and
+              attachment_url | default('', true) | trim %}
+          {% set data = data | combine({kind: attachment_url}) %}
+          {% set data = data | combine({'attachment': {
+            'hide-thumbnail': hide_thumbnail | default(false),
+            'lazy': lazy_attachment | default(false)
+          }}, recursive=true) %}
+        {% elif kind == 'camera' and camera_entity is defined and camera_entity %}
+          {% set data = data | combine({
+            'entity_id': camera_entity,
+            'attachment': {
+              'hide-thumbnail': hide_thumbnail | default(false),
+              'lazy': lazy_attachment | default(false)
+            }
+          }, recursive=true) %}
+        {% endif %}
+        {% if notification_actions | count > 0 %}
+          {% set data = data | combine({'actions': notification_actions}) %}
+        {% else %}
+          {% set data = data | combine({'actions': []}) %}
+        {% endif %}
+        {{ data }}
+
+  - alias: Clear an existing notification
+    if: "{{ operation_value == 'clear' }}"
+    then:
+      - repeat:
+          for_each: "{{ recipient_routes }}"
+          sequence:
+            - alias: Clear one recipient
+              continue_on_error: true
+              action: "{{ repeat.item.action }}"
+              data:
+                message: clear_notification
+                data:
+                  tag: "{{ tag_value }}"
+      - variables:
+          result:
+            status: cleared
+            operation: clear
+            run_id: "{{ run_id }}"
+            tag: "{{ tag_value }}"
+            action_key: null
+            action_slot: null
+            reply_text: null
+            responder_device_id: null
+            recipients_attempted: "{{ recipient_routes | map(attribute='entity_id') | list }}"
+            recipients_unavailable: "{{ unresolved_recipients }}"
+            callback_data: "{{ callback_data | default({}, true) }}"
+      - stop: Notification clear requests completed.
+        response_variable: result
+
+  - alias: Send the notification to every recipient
+    repeat:
+      for_each: "{{ recipient_routes }}"
+      sequence:
+        - alias: Send to one Companion device
+          continue_on_error: true
+          action: "{{ repeat.item.action }}"
+          data:
+            title: "{{ title_value }}"
+            message: "{{ message_value }}"
+            data: >-
+              {% set safe_callback = callback_data | default({}, true) | combine({
+                'modern_notifications_run_id': run_id,
+                'modern_notifications_recipient_device_id': repeat.item.device_id,
+                'modern_notifications_recipient_entity_id': repeat.item.entity_id
+              }) %}
+              {{ notification_data | combine({
+                'action_data': safe_callback
+              }, recursive=true) }}
+
+  - alias: Return immediately when no action can produce a response
+    if: "{{ not has_waitable_action }}"
+    then:
+      - variables:
+          result:
+            status: sent
+            operation: send
+            run_id: "{{ run_id }}"
+            tag: "{{ tag_value }}"
+            action_key: null
+            action_slot: null
+            reply_text: null
+            responder_device_id: null
+            recipients_attempted: "{{ recipient_routes | map(attribute='entity_id') | list }}"
+            recipients_unavailable: "{{ unresolved_recipients }}"
+            callback_data: "{{ callback_data | default({}, true) }}"
+      - stop: Notification send requests completed; no response was requested.
+        response_variable: result
+
+  - alias: Wait for the first actionable response
+    wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ action_1_id }}"
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ action_2_id }}"
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ action_3_id }}"
+    timeout: "{{ timeout_seconds }}"
+    continue_on_timeout: true
+
+  - alias: Normalize the response
+    variables:
+      event_data: >-
+        {{ wait.trigger.event.data if wait.trigger is not none else {} }}
+      selected_action_id: "{{ event_data.get('action') }}"
+      selected_slot: >-
+        {{ 1 if selected_action_id == action_1_id else
+           2 if selected_action_id == action_2_id else
+           3 if selected_action_id == action_3_id else none }}
+      selected_key: >-
+        {{ action_1_key | default('action_1', true) if selected_slot == 1 else
+           action_2_key | default('action_2', true) if selected_slot == 2 else
+           action_3_key | default('action_3', true) if selected_slot == 3 else none }}
+      response_status: >-
+        {{ 'timeout' if wait.trigger is none else
+           'reply' if event_data.get('reply_text') is not none else 'action' }}
+      response_device_id: >-
+        {% set action_payload = event_data.get('action_data', {}) %}
+        {{ action_payload.get('modern_notifications_recipient_device_id',
+           event_data.get('device_id')) }}
+      should_clear: >-
+        {{ clear_on_timeout | default(blueprint_default_clear_on_timeout, true)
+           if wait.trigger is none else
+           clear_on_response | default(blueprint_default_clear_on_response, true) }}
+
+  - alias: Clear the notification after response or timeout
+    if: "{{ should_clear and tag_value }}"
+    then:
+      - repeat:
+          for_each: "{{ recipient_routes }}"
+          sequence:
+            - alias: Clear one recipient
+              continue_on_error: true
+              action: "{{ repeat.item.action }}"
+              data:
+                message: clear_notification
+                data:
+                  tag: "{{ tag_value }}"
+
+  - alias: Return the actionable result
+    variables:
+      result:
+        status: "{{ response_status }}"
+        operation: send
+        run_id: "{{ run_id }}"
+        tag: "{{ tag_value }}"
+        action_key: "{{ selected_key }}"
+        action_slot: "{{ selected_slot }}"
+        reply_text: "{{ event_data.get('reply_text') }}"
+        responder_device_id: "{{ response_device_id }}"
+        recipients_attempted: "{{ recipient_routes | map(attribute='entity_id') | list }}"
+        recipients_unavailable: "{{ unresolved_recipients }}"
+        callback_data: "{{ callback_data | default({}, true) }}"
+  - stop: Notification response handling completed.
+    response_variable: result
