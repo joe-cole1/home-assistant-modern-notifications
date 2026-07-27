@@ -53,7 +53,7 @@ shows only **Title** and **Message**. Both are required when sending a
 notification. Every optional notification feature has a neutral or inactive
 default. The remaining fields are available under **Show advanced options**,
 including recipient overrides, tags, delivery settings, attachments, actions,
-and response handling.
+Android Auto notifications (`car_ui`), and response handling.
 
 Home Assistant script fields do not support separate collapsible groups. The
 single advanced-options section is the native way to keep a script call compact.

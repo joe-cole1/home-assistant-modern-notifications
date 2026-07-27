@@ -231,6 +231,13 @@ fields:
     advanced: true
     selector:
       boolean:
+  car_ui:
+    name: Android Auto notification
+    description: Display the notification on Android Auto when connected to a vehicle.
+    default: false
+    advanced: true
+    selector:
+      boolean:
   ios_interruption_level:
     name: iOS interruption level override
     default: ""
@@ -702,7 +709,8 @@ sequence:
         {% set data = data | combine({
           'visibility': visibility | default('private', true),
           'persistent': persistent | default(false),
-          'sticky': sticky | default(false)
+          'sticky': sticky | default(false),
+          'car_ui': car_ui | default(false)
         }) %}
         {% set push = {} %}
         {% if ios_interruption_level | default('', true) | trim %}
