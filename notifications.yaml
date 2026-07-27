@@ -707,11 +707,17 @@ sequence:
           {% set data = data | combine({'color': color_hex}) %}
         {% endif %}
         {% set data = data | combine({
-          'visibility': visibility | default('private', true),
-          'persistent': persistent | default(false),
-          'sticky': sticky | default(false),
-          'car_ui': car_ui | default(false)
+          'visibility': visibility | default('private', true)
         }) %}
+        {% if persistent | default(false) %}
+          {% set data = data | combine({'persistent': true}) %}
+        {% endif %}
+        {% if sticky | default(false) %}
+          {% set data = data | combine({'sticky': true}) %}
+        {% endif %}
+        {% if car_ui | default(false) %}
+          {% set data = data | combine({'car_ui': true}) %}
+        {% endif %}
         {% set push = {} %}
         {% if ios_interruption_level | default('', true) | trim %}
           {% set push = push | combine({
