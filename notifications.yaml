@@ -1,5 +1,5 @@
 blueprint:
-  name: Modern Multi-Device Notifications
+  name: Modern Multi-Device Notifications v1.1
   description: >-
     Send rich Home Assistant Companion notifications to multiple devices from one
     reusable script. Supports attachments, delivery profiles, three actionable
@@ -55,7 +55,7 @@ blueprint:
           selector:
             boolean:
 
-alias: Modern Multi-Device Notifications
+alias: Modern Multi-Device Notifications v1.1
 description: >-
   Send, update, or clear rich Companion App notifications and optionally return
   the first actionable response.

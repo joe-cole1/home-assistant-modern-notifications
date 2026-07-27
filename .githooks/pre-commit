@@ -1,0 +1,4 @@
+#!/bin/sh
+echo "Bumping version in notifications.yaml..."
+wsl python3 scripts/bump_version.py 2>/dev/null || python3 scripts/bump_version.py 2>/dev/null || python scripts/bump_version.py 2>/dev/null
+git add notifications.yaml
